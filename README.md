@@ -1,128 +1,105 @@
+# CineFlow — Azure ETL Pipeline for Movie Data
 
-# 🎬 Azure Cinematic Data Pipeline Project
+![Azure](https://img.shields.io/badge/Microsoft%20Azure-Cloud-0078D4?logo=microsoftazure&logoColor=white)
+![ADF](https://img.shields.io/badge/Azure%20Data%20Factory-ETL-blue)
+![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform&logoColor=white)
+![Blob Storage](https://img.shields.io/badge/Azure%20Blob%20Storage-Storage-0089D6)
 
-This project implements an end-to-end data pipeline on Azure to process a movie dataset. The pipeline orchestrates the ingestion, transformation, and loading of data using Azure Data Factory and Azure Blob Storage, with the entire infrastructure defined and managed via Terraform.
+## Overview
 
------
+End-to-end cloud ETL pipeline on Azure that ingests a raw movie dataset, filters and remaps it, and delivers a clean output — with the entire infrastructure defined as code via Terraform.
 
-## 🎯 Project Goal
+The pipeline filters movies with rating > 7 and remaps column names from English to Italian, demonstrating a production-style separation of concerns across three storage containers: `input` → `staging` → `output`.
 
-The mission is to transform a raw, unfiltered movie dataset into a clean, relevant, and analysis-ready format. The pipeline automates the data cleansing and enrichment process, ensuring that only high-quality information (in this case, top-rated movies) is made available for downstream applications like streaming platforms, business intelligence dashboards, or recommendation systems.
+---
 
-The objective is to demonstrate the ability to build a robust and scalable ETL (Extract, Transform, Load) process in a cloud environment, managing data cleansing, structural transformation, and final delivery.
-
------
-
-## 🏗️ Solution Architecture
-
-The workflow is designed with a multi-stage approach to ensure separation of concerns, traceability, and robustness.
+## Architecture
 
 ```
-[Blob: input] ---> [ADF Pipeline: Step 1 - Data Flow] ---> [Blob: staging] ---> [ADF Pipeline: Step 2 - Copy Data] ---> [Blob: output]
+[Blob: input]
+    └─► ADF Pipeline Step 1 (Data Flow)
+            Filter: Rating > 7
+            Remap: Title→Film, genresgenregenre→Genere, Rating→Valutazione
+    └─► [Blob: staging]
+            └─► ADF Pipeline Step 2 (Copy Data)
+    └─► [Blob: output]
+            └─► transformed_movies.csv  ✓
 ```
 
-1.  **Ingestion (Input):** The original CSV file (`moviesDB.csv`) is uploaded to the `input` container in Azure Blob Storage. This is the landing zone for raw, immutable data.
-2.  **Transformation (Data Flow):** An **Azure Data Factory (ADF) Data Flow** reads the raw data, performs the following in-memory transformations, and writes the result to a staging area:
-      * **Filtering:** It keeps only records that meet the business criteria: movies with a `Rating` greater than 7 out of 10.
-      * **Remapping (Mapping):** It translates the column names from English to Italian for a target audience (`Title` -\> `Film`, `genresgenregenre` -\> `Genere`, `Rating` -\> `Valutazione`).
-3.  **Staging Area:** The transformed file (`transformed_movies.csv`) is saved in the `staging` container. This area acts as a buffer, holding clean and validated intermediate data, ready for final loading.
-4.  **Final Load (Copy Data):** A **Copy Data** activity retrieves the transformed file from the staging area and loads it into the final `output` container. This final step handles the data transfer and metadata preservation, ensuring reliable delivery.
+---
 
------
+## Pipeline Stages
 
-## 💡 Architectural Decisions
+| Stage | Azure Service | What happens |
+|-------|--------------|--------------|
+| Ingestion | Blob Storage (`input`) | Raw `moviesDB.csv` uploaded as immutable landing zone |
+| Transformation | ADF Data Flow | Filter `Rating > 7`, remap 3 columns EN→IT, Apache Spark backend |
+| Staging | Blob Storage (`staging`) | Validated intermediate output held for inspection |
+| Final load | ADF Copy Data Activity | Moves clean file to `output` with metadata preservation |
 
-Every technical choice was made to meet requirements for efficiency, maintainability, and professionalism.
+---
 
-  * **Use of a Staging Area:** A three-container architecture (`input`, `staging`, `output`) was chosen to implement the **Separation of Concerns** principle. This is a data engineering best practice because it:
-      * **Protects Source Data:** The `input` folder remains an archive of raw, untouched data.
-      * **Simplifies Debugging:** If an error occurs, it's easy to determine whether the issue is in the transformation (by analyzing the `staging` output) or in the final load.
-      * **Increases Robustness:** It prevents the risk of reprocessing already processed data or creating accidental loops.
-  * **Data Flow for Transformation:** The filtering and remapping logic was assigned to a **Data Flow** activity. This tool was chosen over a simple `Copy Activity` for its ability to handle complex transformations visually and scalably by leveraging the power of a managed Apache Spark cluster.
-  * **Infrastructure as Code (IaC) with Terraform:** The entire Azure infrastructure is defined as code using **Terraform**. This approach ensures the environment is reproducible, versionable, and easily managed, allowing all resources to be created and destroyed with a single command.
+## Architectural Decisions
 
------
+- **3-container design**: `input` / `staging` / `output` implements Separation of Concerns — raw data is never overwritten, bugs are isolatable to a specific stage
+- **Data Flow over Copy Activity**: filtering and remapping assigned to Data Flow for scalable Spark-backed transformation rather than a simple file copy
+- **Terraform for IaC**: entire infrastructure (Resource Group, Storage Account, ADF instance) defined as code — reproducible and destroyable with a single command
 
-## 🛠️ Technologies Used
+---
 
-  * **Cloud:** Microsoft Azure
-  * **Storage:** Azure Blob Storage
-  * **ETL/Orchestration:** Azure Data Factory (ADF)
-  * **Infrastructure as Code:** Terraform
-  * **Command-Line Interface:** Azure CLI
+## Technologies
 
------
+| Layer | Tool |
+|-------|------|
+| Cloud | Microsoft Azure |
+| Storage | Azure Blob Storage |
+| ETL / Orchestration | Azure Data Factory (Data Flow + Copy Activity) |
+| Infrastructure as Code | Terraform ≥ 1.0 |
+| CLI | Azure CLI |
 
-## 🚀 Deployment Guide
+---
+
+## Deployment
 
 ### Prerequisites
 
-Before you begin, ensure you have the following tools installed:
+- Azure account with active subscription
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
+- [Terraform](https://developer.hashicorp.com/terraform/tutorials/azure-get-started/install-cli) ≥ 1.0
 
-  * An Azure Account with an active subscription.
-  * [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
-  * [Terraform](https://developer.hashicorp.com/terraform/tutorials/azure-get-started/install-cli) (version \>= 1.0)
-
-### 1\. Local Setup & Authentication
-
-Clone the repository and log in to your Azure account.
+### 1. Authenticate
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd <PROJECT_FOLDER_NAME>
+git clone https://github.com/sylver86/02-azure-data-pipeline-terraform-adf.git
+cd 02-azure-data-pipeline-terraform-adf
 az login
 ```
 
-### 2\. Deploy Infrastructure with Terraform
-
-Navigate to the Terraform directory and run the commands to create the Azure resources.
+### 2. Deploy infrastructure
 
 ```bash
 cd terraform
-
-# Initialize Terraform to download the necessary providers
 terraform init
-
-# (Optional) Review the execution plan to see what will be created
-terraform plan
-
-# Apply the configuration and create the resources. Type 'yes' when prompted.
-terraform apply
+terraform plan      # Review what will be created
+terraform apply     # Type 'yes' to confirm
 ```
 
-This will create the Resource Group, Storage Account (with `input`, `staging`, and `output` containers), and the Azure Data Factory instance.
+Creates: Resource Group · Storage Account (3 containers) · Azure Data Factory instance.
 
-### 3\. ADF Pipeline Configuration
+### 3. Run the pipeline
 
-The pipeline logic is defined in the ARM template files located in the `/adf` folder. For this project, the pipeline was configured manually in the ADF Studio, but these files represent its configuration and can be used for automated deployments.
+1. Upload `moviesDB.csv` to the **`input`** container
+2. Open ADF Studio → navigate to the main pipeline → click **Debug**
+3. After completion, the **`output`** container will contain `transformed_movies.csv` with only movies rated > 7 and Italian column names
 
------
-
-## 🏃 Running the Pipeline
-
-1.  **Upload the Input Dataset:**
-
-      * Upload the `moviesDB.csv` file to the **`input`** container in the newly created Azure Storage Account.
-
-2.  **Trigger the Pipeline:**
-
-      * Open the **ADF Studio** from the Azure Portal.
-      * Navigate to your main pipeline and click **Debug** to start a test run.
-
-3.  **Expected Result:**
-
-      * After the run completes (check the status in the "Monitor" tab), the **`output`** container will contain a new CSV file. This file will include only the movies with a rating higher than 7 and the remapped Italian column names (`Film`, `Genere`, `Valutazione`).
-
------
-
-## 🧹 Resource Cleanup
-
-**This step is crucial to avoid any unexpected costs.**
-
-To delete **all** the resources created by this project, run the following command from the `terraform` directory:
+### 4. Cleanup
 
 ```bash
-terraform destroy
+terraform destroy   # Deletes all Azure resources — avoids unexpected costs
 ```
 
-Type `yes` when prompted to confirm the deletion.
+---
+
+## Technologies
+
+`Microsoft Azure` · `Azure Data Factory` · `Azure Blob Storage` · `Terraform` · `Apache Spark (via ADF Data Flow)` · `Azure CLI`
